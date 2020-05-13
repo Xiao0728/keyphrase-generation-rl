@@ -42,6 +42,7 @@ def model_opts(parser):
     parser.add_argument('-share_embeddings', default=True, action='store_true',
                         help="""Share the word embeddings between encoder
                          and decoder.""")
+
     parser.add_argument('-use_target_encoder', action='store_true',
                         help="Use target decoder")
 
@@ -228,10 +229,12 @@ def train_opts(parser):
                         help="""If a valid path is specified, then this will load
                         pretrained word embeddings on the encoder side.
                         See README for specific formatting instructions.""")
+
     parser.add_argument('-pre_word_vecs_dec',
                         help="""If a valid path is specified, then this will load
                         pretrained word embeddings on the decoder side.
                         See README for specific formatting instructions.""")
+
     # Fixed word vectors
     parser.add_argument('-fix_word_vecs_enc',
                         action='store_true',
@@ -272,9 +275,10 @@ def train_opts(parser):
                         help='Maximum prediction length.')
     parser.add_argument('-topk', type=str, default='M',
                         help='The only pick the top k predictions in reward.')
+                        
     parser.add_argument('-reward_type', default='0', type=int,
-                        choices=[0, 1, 2, 3, 4, 5, 6, 7, 8],
-                        help="""Type of reward. 0: f1, 1: recall, 2: ndcg, 3: accuracy, 4: alpha-ndcg, 5: alpha-dcg, 6: AP, 7: F1 penalize duplicate""")
+                        choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                        help="""Type of reward. 0: f1, 1: recall, 2: ndcg, 3: accuracy, 4: alpha-ndcg, 5: alpha-dcg, 6: AP, 7: F1 penalize duplicate, 9: idf reward for each individual term, 10: reward for SCSC for the generated sentence""")
     parser.add_argument('-match_type', default='exact',
                         choices=['exact', 'sub'],
                         help="""Either exact matching or substring matching.""")
