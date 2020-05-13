@@ -17,7 +17,28 @@ def sample_list_to_str_2dlist(sample_list, oov_lists, idx2word, vocab_size, eos_
     return pred_str_2dlist
 
 
-def compute_batch_reward(pred_str_2dlist, trg_str_2dlist, batch_size, reward_type='f1', topk=10, match_type="exact", regularization_factor=0.0, regularization_type=0, entropy=None):
+"""
+cumulative_reward = compute_batch_reward(pred_str_2dlist, 
+         trg_str_2dlist, 
+         batch_size, 
+         reward_type=reward_type, 
+         topk=topk, 
+         match_type=match_type,
+         regularization_factor=regularization_factor, 
+         regularization_type=regularization_type, 
+         entropy=entropy_array)
+"""
+
+def compute_batch_reward(pred_str_2dlist, 
+                         trg_str_2dlist, 
+                         batch_size, 
+                         reward_type='f1', 
+                         topk=10, 
+                         match_type="exact", 
+                         regularization_factor=0.0, 
+                         regularization_type=0, 
+                         entropy=None):
+    
     assert len(trg_str_2dlist) == batch_size
     assert len(pred_str_2dlist) == batch_size
     reward = np.zeros(batch_size)
@@ -34,18 +55,27 @@ def compute_batch_reward(pred_str_2dlist, trg_str_2dlist, batch_size, reward_typ
             entropy_idx = None
         else:
             entropy_idx = entropy[idx]
-        reward[idx] = compute_reward(pred_str_list, trg_str_list, reward_type, topk, match_type, regularization_factor, regularization_type, entropy_idx)
+        reward[idx] = compute_reward(pred_str_list, 
+                                     trg_str_list, 
+                                     reward_type, 
+                                     topk, match_type, 
+                                     regularization_factor, 
+                                     regularization_type, 
+                                     entropy_idx)
     return reward
 
+def softmax(x):
+    return np.exp(x)/np.sum(np.exp(x),axis=0)
 
 def compute_reward(pred_str_list, trg_str_list, reward_type, topk, match_type="exact", regularization_factor=0.0, regularization_type=0, entropy=None):
     num_predictions = len(pred_str_list)
+    
     # perform stemming
     stemmed_trg_str_list = stem_str_list(trg_str_list)
     stemmed_pred_str_list = stem_str_list(pred_str_list)
-
-    trg_str_unique_filter = check_duplicate_keyphrases(
-        stemmed_trg_str_list)  # a boolean nparray, true if not duplicated
+    
+    # a boolean nparray, true if not duplicated
+    trg_str_unique_filter = check_duplicate_keyphrases(stemmed_trg_str_list)  
     pred_str_unique_filter = check_duplicate_keyphrases(stemmed_pred_str_list)
 
     unique_stemmed_trg_str_list = [word_list for word_list, is_keep in zip(stemmed_trg_str_list, trg_str_unique_filter)
@@ -54,6 +84,7 @@ def compute_reward(pred_str_list, trg_str_list, reward_type, topk, match_type="e
     unique_stemmed_pred_str_list = [word_list for word_list, is_keep in
                                     zip(stemmed_pred_str_list, pred_str_unique_filter) if
                                     is_keep]
+    
     num_unique_targets = len(unique_stemmed_trg_str_list)
     num_unique_predictions = len(unique_stemmed_pred_str_list)
 
@@ -65,7 +96,20 @@ def compute_reward(pred_str_list, trg_str_list, reward_type, topk, match_type="e
         else:
             penalized_stemmed_pred_str_list.append(['<pad>'])
     # ============
-
+    """
+    TODO: change the regularization_type:
+    ==> if the term's idf value is very high, meaning its stop words, thus the term is less discriminative to find the correlated document; thus we prefer lower idf for the term;
+    if the idf is very high, we should penalize the sentence. 
+    Think: if reward shapping: calculate the reward for each term, then the final sequence reward is added together?
+    Thus: for query paraphrase task: we should
+    Plan A: reward shapping = False, compute the whole sequence reward: reward is given by the sentence QPP, and regularized with the high idf.
+    
+    Plan B: reward shapping =Ture, compute the idf score for each term, use the -idf as the reward. 
+    
+    ==> calculate the idf for each each, and store in the list, if the not discriminative term, regard incorrect terms generated?
+    append <pad> token???
+    
+    """
     if regularization_type == 1:
         """
         if num_predictions > 0:
@@ -81,6 +125,9 @@ def compute_reward(pred_str_list, trg_str_list, reward_type, topk, match_type="e
         regularization = unique_prediction_fraction
     elif regularization_type == 2:
         regularization = entropy
+    elif regularization_type == 3:
+        
+        pass
     else:
         regularization = 0.0
 
@@ -140,6 +187,28 @@ def compute_reward(pred_str_list, trg_str_list, reward_type, topk, match_type="e
         is_match = compute_match_result(trg_str_list=unique_stemmed_trg_str_list,
                                         pred_str_list=penalized_stemmed_pred_str_list, type=match_type, dimension=1)
         tmp_reward = average_precision_at_k(is_match, topk, num_predictions, num_unique_targets)
+        
+    elif reward_type == 9: #SCSC score for a pred_sentence.
+        # f1 while treating all duplication as incorrect guess
+        # boolean np array to indicate which prediction matches the target
+        is_match = compute_match_result(trg_str_list=unique_stemmed_trg_str_list,
+                                        pred_str_list=penalized_stemmed_pred_str_list, type=match_type, dimension=1)
+        precision_k, recall_k, f1_k, _, _ = compute_classification_metrics_at_k(is_match, num_predictions,
+                                                                                num_unique_targets, topk=topk)
+        tmp_reward_QPP = compute_clarity_score(unique_stemmed_pred_str_list)
+        tmp_reward = f1_k*0.5+0.5*softmax(tmp_reward_QPP)
+    
+        
+    elif reward_type ==10:
+        is_match = compute_match_result(trg_str_list=unique_stemmed_trg_str_list,
+                                        pred_str_list=unique_stemmed_pred_str_list, type=match_type, dimension=1)
+        precision_k, recall_k, f1_k, _, _ = compute_classification_metrics_at_k(is_match, num_unique_predictions,
+                                                                                num_unique_targets, topk=topk)
+        tmp_reward_QPP = compute_clarity_score(unique_stemmed_pred_str_list)
+        tmp_reward = 0.5*f1_k+0.5*tmp_reward_QPP/120
+        
+   
+      
 
     # Add the regularization term to the reward only if regularization type != 0
     if regularization_type == 0 or regularization_factor == 0:
@@ -197,28 +266,92 @@ def present_absent_reward_to_stepwise_reward(present_absent_reward, max_pred_seq
 
     return stepwise_reward
 
+"""
+if: reward_shapping: compute reward for each keyphrases!!!
 
-def compute_phrase_reward(pred_str_2dlist, trg_str_2dlist, batch_size, max_num_phrases, reward_shaping, reward_type, topk, match_type="exact", regularization_factor=0.0, regularization_type=0, entropy=None):
+phrase_reward = compute_phrase_reward(pred_str_2dlist, 
+                                      trg_str_2dlist, 
+                                      batch_size, 
+                                      max_num_pred_phrases, 
+                                      reward_shaping,
+                                      reward_type, 
+                                      topk, 
+                                      match_type, 
+                                      regularization_factor, 
+                                      regularization_type, 
+                                      entropy_array)
+                                      
+"""
+
+def compute_phrase_reward(pred_str_2dlist, 
+                          trg_str_2dlist, 
+                          batch_size, 
+                          max_num_phrases, 
+                          reward_shaping, 
+                          reward_type, 
+                          topk, 
+                          match_type="exact", regularization_factor=0.0, regularization_type=0, entropy=None):
     phrase_reward = np.zeros((batch_size, max_num_phrases))
     if reward_shaping:
         for t in range(max_num_phrases):
             pred_str_2dlist_at_t = [pred_str_list[:t + 1] for pred_str_list in pred_str_2dlist]
-            phrase_reward[:, t] = compute_batch_reward(pred_str_2dlist_at_t, trg_str_2dlist, batch_size, reward_type, topk, match_type, regularization_factor, regularization_type, entropy)
+            phrase_reward[:, t] = compute_batch_reward(pred_str_2dlist_at_t, 
+                                                       trg_str_2dlist, 
+                                                       batch_size, 
+                                                       reward_type, 
+                                                       topk, match_type, 
+                                                       regularization_factor, 
+                                                       regularization_type, 
+                                                       entropy)
     else:
-        phrase_reward[:, -1] = compute_batch_reward(pred_str_2dlist, trg_str_2dlist, batch_size, reward_type,
-                                                               topk, match_type, regularization_factor, regularization_type, entropy)
+        phrase_reward[:, -1] = compute_batch_reward(pred_str_2dlist, 
+                                                    trg_str_2dlist, 
+                                                    batch_size, 
+                                                    reward_type,
+                                                    topk, 
+                                                    match_type, 
+                                                    regularization_factor, 
+                                                    regularization_type, 
+                                                    entropy)
+        
     return phrase_reward
 
 
-def compute_phrase_reward_backup(pred_str_2dlist, trg_str_2dlist, batch_size, num_predictions, reward_shaping, reward_type, topk, match_type="exact", regularization_factor=0.0, regularization_type=0, entropy=None):
+
+
+def compute_phrase_reward_backup(pred_str_2dlist, 
+                                 trg_str_2dlist, 
+                                 batch_size, 
+                                 num_predictions, 
+                                 reward_shaping, 
+                                 reward_type, 
+                                 topk, 
+                                 match_type="exact", 
+                                 regularization_factor=0.0, 
+                                 regularization_type=0, 
+                                 entropy=None):
     phrase_reward = np.zeros((batch_size, num_predictions))
     if reward_shaping:
         for t in range(num_predictions):
             pred_str_2dlist_at_t = [pred_str_list[:t + 1] for pred_str_list in pred_str_2dlist]
-            phrase_reward[:, t] = compute_batch_reward(pred_str_2dlist_at_t, trg_str_2dlist, batch_size, reward_type, topk, match_type, regularization_factor, regularization_type, entropy)
+            phrase_reward[:, t] = compute_batch_reward(pred_str_2dlist_at_t, 
+                                                       trg_str_2dlist, 
+                                                       batch_size, 
+                                                       reward_type, 
+                                                       topk, match_type, 
+                                                       regularization_factor, 
+                                                       regularization_type, 
+                                                       entropy)
     else:
-        phrase_reward[:, num_predictions - 1] = compute_batch_reward(pred_str_2dlist, trg_str_2dlist, batch_size, reward_type,
-                                                               topk, match_type, regularization_factor, regularization_type, entropy)
+        phrase_reward[:, num_predictions - 1] = compute_batch_reward(pred_str_2dlist, 
+                                                                     trg_str_2dlist, 
+                                                                     batch_size, 
+                                                                     reward_type,
+                                                                     topk, 
+                                                                     match_type, 
+                                                                     regularization_factor, 
+                                                                     regularization_type, 
+                                                                     entropy)
     return phrase_reward
 
 

@@ -7,7 +7,117 @@ import os
 import logging
 import pykp.io
 import pickle
+"""
+import pyterrier as pt
+pt.init()
+from jnius import autoclass
 
+JIR = autoclass('org.terrier.querying.IndexRef')
+JMF = autoclass('org.terrier.querying.ManagerFactory')
+indexref = JIR.of("/local/terrier/Indices/msMarco/blockFormattedIndexingStem/data.properties")
+manager = JMF._from_(indexref)
+JIF = autoclass('org.terrier.structures.IndexFactory')
+index = JIF.of(indexref)
+print("THIS IS TESTING",index.getCollectionStatistics().toString())
+all_tokens_lower=index.getCollectionStatistics().getNumberOfTokens()
+# print("all_tokens_lower",all_tokens_lower)
+len_documents=index.getCollectionStatistics().getNumberOfDocuments()
+# print("len_documents",len_documents)
+"""
+
+
+import jnius_config
+import math
+import numpy
+jnius_config.add_options('-XX:-OmitStackTraceInFastThrow')
+import os 
+# os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-1.8.0-openjdk-amd64"
+os.environ["JAVA_HOME"] = "/local/trmaster/opt/jdk1.8.0_31"
+# increase the size of the vm
+# jnius_config.add_options('-XX:-OmitStackTraceInFastThrow')
+# jnius_config.add_options("-Xmx4096M")
+jnius_config.set_classpath("/users/tr.xiaow/terrier/pyjnius_tr5x/terrier-project-5.2-SNAPSHOT-jar-with-dependencies.jar")
+from jnius import autoclass
+
+JIR = autoclass('org.terrier.querying.IndexRef')
+JMF = autoclass('org.terrier.querying.ManagerFactory')
+appSetup = autoclass('org.terrier.utility.ApplicationSetup')
+appSetup.setProperty("querying.processes","terrierql:TerrierQLParser,parsecontrols:TerrierQLToControls,parseql:TerrierQLToMatchingQueryTerms,matchopql:MatchingOpQLParser,applypipeline:ApplyTermPipeline,localmatching:LocalManager$ApplyLocalMatching,qe:QueryExpansion,labels:org.terrier.learning.LabelDecorator,filters:LocalManager$PostFilterProcess")
+appSetup.setProperty("querying.postfilters","decorate:SimpleDecorate,site:SiteFilter,scope:Scope")
+appSetup.setProperty("querying.default.controls","wmodel:DPH,parsecontrols:on,parseql:on,applypipeline:on,terrierql:on,localmatching:on,filters:on,decorate:on")
+appSetup.setProperty("fat.featured.scoring.matching.features","QI:StaticFeature(OIS,/users/grad/xiaow/pyjnius_tr5x/pagerank.oos.gz);WMODEL$firstmatchscore:BM25;WMODEL$firstkeep:BM25")
+# QI:StaticFeature(OIS,/users/level4/software/IR/Resources/features/pagerank.oos.gz);
+# indexref = JIR.of("/users/grad/xiaow/terrier/pyjnius_tr5x/titlebodyatext_noblocks.properties")
+indexref = JIR.of("/local/terrier/Indices/msMarco/blockFormattedIndexingStem/data.properties")
+manager = JMF._from_(indexref)
+JIF = autoclass('org.terrier.structures.IndexFactory')
+index = JIF.of(indexref)
+lex = index.getLexicon()
+le = lex.getLexiconEntry("goldfish")
+print("!!!!!!!!!!!!!!!!THIS IS A TEST FOR TERRIER:",le.getFrequency())
+all_tokens_lower=index.getCollectionStatistics().getNumberOfTokens()
+# print("all_tokens_lower",all_tokens_lower)
+len_documents=index.getCollectionStatistics().getNumberOfDocuments()
+# print("len_documents",len_documents)
+
+
+"""
+for each pred_str_list:
+    1. locate the idx corresponding word in vocabulary;
+    2. calculate the clarity score for current sentence:
+       2.1 for each token in the pred_sentence:
+           get the statistics using: 
+                lex = index.getLexicon()
+                le = lex.getLexiconEntry("goldfish")
+                le.getFrequency()
+            then calculate the whole SCS for the sentence
+    3. return as the tmp_reward
+
+QUESTION: for each action, can we do somthing? to stop the bad term, idf is very low. 
+
+    """
+def compute_clarity_score(pred_str_list):
+    query_terms_doc_count={}
+    query_terms_total_count={}
+    lex = index.getLexicon()
+    for t in pred_str_list:
+        t="".join(t)
+        le = lex.getLexiconEntry(t)
+        if le is None:
+            query_terms_doc_count[t]=0
+            query_terms_total_count[t]=0
+        else:
+            query_terms_doc_count[t]=le.getFrequency()
+            query_terms_total_count[t]=le.getDocumentFrequency()
+    
+    #Calculating avgIDF, SCS(Q) metrics for each query
+    avgidf = 0
+    scsq = 0
+    scqt = 0
+    sumscqt = 0
+    maxscqt = 0
+    for token in pred_str_list:
+        token = ''.join(token)
+        if query_terms_doc_count[token]>0:
+            idft = math.log((len_documents/query_terms_doc_count[token]),2) #Calculating idf(t) using log base 2
+            avgidf = avgidf+idft
+            scsq = scsq+math.log((all_tokens_lower/query_terms_total_count[token]),2)
+            scqt = (1 + math.log(query_terms_total_count[token],2))*idft
+            sumscqt = sumscqt+scqt
+            if scqt > maxscqt:
+                maxscqt=scqt
+                
+    if len(pred_str_list)>0:
+        scsq = math.log((1/len(pred_str_list)),2)+scsq/len(pred_str_list)
+        avgidf = avgidf/len(pred_str_list)
+        maxscqt = maxscqt
+        sumscqt = sumscqt
+        avgscqt = sumscqt/len(pred_str_list)
+    else:
+        scsq = 0
+        avgidf = 0
+        avgscqt = 0
+    return avgscqt
 
 def check_valid_keyphrases(str_list):
     num_pred_seq = len(str_list)
