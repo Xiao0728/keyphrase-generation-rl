@@ -117,7 +117,68 @@ def compute_clarity_score(pred_str_list):
         scsq = 0
         avgidf = 0
         avgscqt = 0
-    return avgscqt
+    min=-10
+    max=122
+    avgscqt=(avgscqt-min)/(max-min)
+    if avgscqt>1:
+        return 1
+    elif avgscqt<0:
+        return 0
+    else:
+        return avgscqt
+
+    
+    
+    
+import torch
+from pytorch_pretrained_bert import BertTokenizer, BertModel, BertForMaskedLM
+# Load pre-trained model tokenizer (vocabulary)
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+from tkinter import _flatten
+
+def bertSenCos(textSrc,textPred):
+#     for the input sentence is 2-d list
+    Src_list_faltten=list(_flatten(textSrc))
+    text1 = ' '.join([str(x) for x in Src_list_faltten])
+    Pred_list_faltten=list(_flatten(textPred))
+    text2 = ' '.join([str(x) for x in Pred_list_faltten])
+#     mask the texts
+    marked_text1 = "[CLS] " + text1 + " [SEP]"
+    marked_text2 = "[CLS] " + text2 + " [SEP]"
+    # Tokenize our sentence with the BERT tokenizer.
+    tokenized_text1 = tokenizer.tokenize(marked_text1)
+    tokenized_text2 = tokenizer.tokenize(marked_text2)
+    # Map the token strings to their vocabulary indeces.
+    indexed_tokens1 = tokenizer.convert_tokens_to_ids(tokenized_text1)
+    indexed_tokens2 = tokenizer.convert_tokens_to_ids(tokenized_text2)
+    segments_ids1 = [1] * len(tokenized_text1)
+    segments_ids2 = [1] * len(tokenized_text2)
+    # Convert inputs to PyTorch tensors
+    tokens_tensor1 = torch.tensor([indexed_tokens1])
+    segments_tensors1 = torch.tensor([segments_ids1])
+    tokens_tensor2 = torch.tensor([indexed_tokens2])
+    segments_tensors2 = torch.tensor([segments_ids2])
+    # Load pre-trained model (weights)
+    model = BertModel.from_pretrained('bert-base-uncased')
+
+    # Put the model in "evaluation" mode, meaning feed-forward operation.
+    model.eval()
+    # Predict hidden states features for each layer
+    with torch.no_grad():
+        encoded_layers1,_ = model(tokens_tensor1, segments_tensors1)
+        encoded_layers2,_ = model(tokens_tensor2, segments_tensors2)
+    
+    token_vecs1 = encoded_layers1[11][0]
+    # Calculate the average of all token vectors.
+    sentence_embedding1 = torch.mean(token_vecs1, dim=0)
+    token_vecs2 = encoded_layers2[11][0]
+    # Calculate the average of all token vectors.
+    sentence_embedding2 = torch.mean(token_vecs2, dim=0)
+    from scipy.spatial.distance import cosine
+
+    # Calculate the cosine similarity between the input sentence and pred sentence
+    BertCos=1 - cosine(sentence_embedding1, sentence_embedding2)
+    return BertCos
 
 def check_valid_keyphrases(str_list):
     num_pred_seq = len(str_list)
