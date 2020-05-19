@@ -196,7 +196,7 @@ def compute_reward(pred_str_list, trg_str_list, reward_type, topk, match_type="e
         precision_k, recall_k, f1_k, _, _ = compute_classification_metrics_at_k(is_match, num_predictions,
                                                                                 num_unique_targets, topk=topk)
         tmp_reward_QPP = compute_clarity_score(unique_stemmed_pred_str_list)
-        tmp_reward = f1_k*0.5+0.5*softmax(tmp_reward_QPP)
+        tmp_reward = f1_k*0.5+0.5*tmp_reward_QPP
     
         
     elif reward_type ==10:
@@ -204,8 +204,9 @@ def compute_reward(pred_str_list, trg_str_list, reward_type, topk, match_type="e
                                         pred_str_list=unique_stemmed_pred_str_list, type=match_type, dimension=1)
         precision_k, recall_k, f1_k, _, _ = compute_classification_metrics_at_k(is_match, num_unique_predictions,
                                                                                 num_unique_targets, topk=topk)
+        BERTScore = bertSenCos(stemmed_trg_str_list,stemmed_pred_str_list)
         tmp_reward_QPP = compute_clarity_score(unique_stemmed_pred_str_list)
-        tmp_reward = 0.5*f1_k+0.5*tmp_reward_QPP/120
+        tmp_reward = f1_k+tmp_reward_QPP+BERTScore
         
    
       
