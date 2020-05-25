@@ -279,6 +279,7 @@ def train_opts(parser):
     parser.add_argument('-reward_type', default='0', type=int,
                         choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
                         help="""Type of reward. 0: f1, 1: recall, 2: ndcg, 3: accuracy, 4: alpha-ndcg, 5: alpha-dcg, 6: AP, 7: F1 penalize duplicate, 9: idf reward for each individual term, 10: reward for SCSC for the generated sentence""")
+    
     parser.add_argument('-match_type', default='exact',
                         choices=['exact', 'sub'],
                         help="""Either exact matching or substring matching.""")
@@ -292,7 +293,15 @@ def train_opts(parser):
                         help="Use Monte Carlo rollouts to estimate q value. Not support yet.")
     parser.add_argument('-num_rollouts', type=int, default=3,
                         help="The number of Monte Carlo rollouts. Only effective when mc_rollouts is True. Not supported yet")
-
+    
+    # reward function hyperparameters
+    parser.add_argument('-x_value',default="0",
+                        help="the hyperparameter for F1 reward")
+    parser.add_argument('-y_value',default="0",
+                        help="the hyperparameter for QPP reward")
+    parser.add_argument('-z_value',default="0",
+                        help="the hyperparameter for BERT reward")
+    
     # One2many options
     parser.add_argument('-delimiter_type', type=int, default=0, choices=[0, 1],
                         help='If type is 0, use <sep> to separate keyphrases. If type is 1, use <eos> to separate keyphrases')
