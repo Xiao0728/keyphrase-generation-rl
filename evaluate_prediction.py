@@ -38,7 +38,7 @@ os.environ["JAVA_HOME"] = "/local/trmaster/opt/jdk1.8.0_31"
 # jnius_config.add_options("-Xmx4096M")
 jnius_config.set_classpath("/users/tr.xiaow/terrier/pyjnius_tr5x/terrier-project-5.2-SNAPSHOT-jar-with-dependencies.jar")
 from jnius import autoclass
-
+from nltk.stem import PorterStemmer
 JIR = autoclass('org.terrier.querying.IndexRef')
 JMF = autoclass('org.terrier.querying.ManagerFactory')
 appSetup = autoclass('org.terrier.utility.ApplicationSetup')
@@ -73,15 +73,16 @@ for each pred_str_list:
             then calculate the whole SCS for the sentence
     3. return as the tmp_reward
 
-QUESTION: for each action, can we do somthing? to stop the bad term, idf is very low. 
 
     """
 def compute_clarity_score(pred_str_list):
+    porter = PorterStemmer()
     query_terms_doc_count={}
     query_terms_total_count={}
     lex = index.getLexicon()
     for t in pred_str_list:
         t="".join(t)
+        t=porter.stem(t)
         le = lex.getLexiconEntry(t)
         if le is None:
             query_terms_doc_count[t]=0
@@ -98,6 +99,7 @@ def compute_clarity_score(pred_str_list):
     maxscqt = 0
     for token in pred_str_list:
         token = ''.join(token)
+        token=porter.stem(token)
         if query_terms_doc_count[token]>0:
             idft = math.log((len_documents/query_terms_doc_count[token]),2) #Calculating idf(t) using log base 2
             avgidf = avgidf+idft
@@ -126,16 +128,20 @@ def compute_clarity_score(pred_str_list):
         return 0
     else:
         return avgscqt
+    
+"""
+# Compute cosine similarity between the source sentence and the pre_sentence  
+"""
 
-    
-    
     
 import torch
 from pytorch_pretrained_bert import BertTokenizer, BertModel, BertForMaskedLM
 # Load pre-trained model tokenizer (vocabulary)
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 from tkinter import _flatten
-
+from scipy.spatial.distance import cosine
+model = BertModel.from_pretrained('bert-base-uncased')
+model.eval()
 def bertSenCos(textSrc,textPred):
 #     for the input sentence is 2-d list
     Src_list_faltten=list(_flatten(textSrc))
@@ -159,10 +165,10 @@ def bertSenCos(textSrc,textPred):
     tokens_tensor2 = torch.tensor([indexed_tokens2])
     segments_tensors2 = torch.tensor([segments_ids2])
     # Load pre-trained model (weights)
-    model = BertModel.from_pretrained('bert-base-uncased')
+#     model = BertModel.from_pretrained('bert-base-uncased')
 
     # Put the model in "evaluation" mode, meaning feed-forward operation.
-    model.eval()
+#     model.eval()
     # Predict hidden states features for each layer
     with torch.no_grad():
         encoded_layers1,_ = model(tokens_tensor1, segments_tensors1)
@@ -174,11 +180,12 @@ def bertSenCos(textSrc,textPred):
     token_vecs2 = encoded_layers2[11][0]
     # Calculate the average of all token vectors.
     sentence_embedding2 = torch.mean(token_vecs2, dim=0)
-    from scipy.spatial.distance import cosine
-
     # Calculate the cosine similarity between the input sentence and pred sentence
     BertCos=1 - cosine(sentence_embedding1, sentence_embedding2)
     return BertCos
+
+
+
 
 def check_valid_keyphrases(str_list):
     num_pred_seq = len(str_list)

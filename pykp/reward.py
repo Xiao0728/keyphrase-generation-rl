@@ -197,17 +197,25 @@ def compute_reward(pred_str_list, trg_str_list, reward_type, topk, match_type="e
                                                                                 num_unique_targets, topk=topk)
         tmp_reward_QPP = compute_clarity_score(unique_stemmed_pred_str_list)
         tmp_reward = f1_k*0.5+0.5*tmp_reward_QPP
-    
+        #print("this is F1 SCORE:",f1_k)
+        #print("this is QPP SCORE:",tmp_reward_QPP)
+        #print("this is returned reward:",tmp_reward)
+        #print("============================================================")
         
     elif reward_type ==10:
         is_match = compute_match_result(trg_str_list=unique_stemmed_trg_str_list,
-                                        pred_str_list=unique_stemmed_pred_str_list, type=match_type, dimension=1)
-        precision_k, recall_k, f1_k, _, _ = compute_classification_metrics_at_k(is_match, num_unique_predictions,
+                                        pred_str_list=penalized_stemmed_pred_str_list, type=match_type, dimension=1)
+        precision_k, recall_k, f1_k, _, _ = compute_classification_metrics_at_k(is_match, num_predictions,
                                                                                 num_unique_targets, topk=topk)
-        BERTScore = bertSenCos(stemmed_trg_str_list,stemmed_pred_str_list)
-        tmp_reward_QPP = compute_clarity_score(unique_stemmed_pred_str_list)
-        tmp_reward = f1_k+tmp_reward_QPP+BERTScore
-        
+        BERTScore = bertSenCos(unique_stemmed_trg_str_list,unique_stemmed_pred_str_list)
+        tmp_reward = BERTScore
+        # tmp_reward_QPP = compute_clarity_score(unique_stemmed_pred_str_list)
+        # print("============================================================")
+        # print("This is stemmed_trg_str_list",stemmed_trg_str_list)
+        # print("This is stemmed_pred_str_list",stemmed_pred_str_list)
+        # print("this is BERTSIMILARITY SCORE:",BERTScore)
+        # print("============================================================")
+
    
       
 
